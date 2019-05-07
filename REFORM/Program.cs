@@ -104,12 +104,14 @@ namespace REFORM
                     }
 
                     using (Stream stream = client.OpenRead(reformAccessLink))
-                    using (StreamReader streamReader = new StreamReader(stream))
+                    using (StreamReader streamReader = new StreamReader(stream, System.Text.Encoding.UTF8))
                     using (var csv = new CsvReader(streamReader))
                     using (var dataReader = new CsvDataReader(csv))
                     {
                         csv.Configuration.TypeConverterOptionsCache.GetOptions<string>().NullValues.Add("");
                         csv.Configuration.Encoding = System.Text.Encoding.UTF8;
+                        csv.Configuration.Delimiter = ",";
+                        csv.Configuration.LineBreakInQuotedFieldIsBadData = false;
                         csv.Configuration.CultureInfo = new CultureInfo("en-US");
                         //csv.Configuration.BadDataFound = null;
                         if (countBytes == "true")
