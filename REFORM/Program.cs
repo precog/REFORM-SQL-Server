@@ -35,6 +35,8 @@ namespace REFORM
 
     class Program
     {
+        public static string CurrentCulture { get; private set; }
+
         static DataType SqlType(String reformType)
         {
             switch (reformType)
@@ -73,6 +75,7 @@ namespace REFORM
         }
         static void Main(string[] args)
         {
+            Program.CurrentCulture = "ru-RU";
             string serverConnectionString = args[0];
             string serverDatabase = args[1];
             string serverSchema = args[2];
@@ -106,7 +109,6 @@ namespace REFORM
                     using (Stream stream = client.OpenRead(reformAccessLink))
                     using (StreamReader streamReader = new StreamReader(stream, System.Text.Encoding.UTF8))
                     using (var csv = new CsvReader(streamReader))
-                    using (var dataReader = new CsvDataReader(csv))
                     {
                         csv.Configuration.TypeConverterOptionsCache.GetOptions<string>().NullValues.Add("");
                         csv.Configuration.Encoding = System.Text.Encoding.UTF8;
@@ -118,13 +120,17 @@ namespace REFORM
                         {
                             csv.Configuration.CountBytes = true;
                         }
-                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(serverConnectionString))
+                        using (var dataReader = new CsvDataReader(csv))
                         {
-                            bulkCopy.DestinationTableName = $"{serverDatabase}.{serverSchema}.[{SqlName(table.Name)}]";
-                            bulkCopy.EnableStreaming = true;
-                            bulkCopy.BulkCopyTimeout = 0;
-                            bulkCopy.WriteToServer(dataReader);
-                            bulkCopy.Close();
+
+                            using (SqlBulkCopy bulkCopy = new SqlBulkCopy(serverConnectionString))
+                            {
+                                bulkCopy.DestinationTableName = $"{serverDatabase}.{serverSchema}.[{SqlName(table.Name)}]";
+                                bulkCopy.EnableStreaming = true;
+                                bulkCopy.BulkCopyTimeout = 0;
+                                bulkCopy.WriteToServer(dataReader);
+                                bulkCopy.Close();
+                            }
                         }
                     }
                 }
