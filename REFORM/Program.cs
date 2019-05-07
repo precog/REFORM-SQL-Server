@@ -77,37 +77,31 @@ namespace REFORM
             string serverDatabase = args[1];
             string serverSchema = args[2];
             string countBytes = args[3];
-            string dropExistingTable = args[4];
+            string writeToExisting = args[4];
             string reformAccessLink = args[5];
             using (WebClient client = new WebClient())
             {
                 using (Stream reformTableStream = client.OpenRead(Regex.Replace(reformAccessLink, @"/live/dataset", "")))
-                using (StreamReader reformTableStreamReader = new StreamReader(reformTableStream))
+                using (StreamReader reformTableStreamReader = new StreamReader(reformTableStream, System.Text.Encoding.UTF8))
                 {
                     String encodedTable = reformTableStreamReader.ReadToEnd();
                     ReformTable table = JsonConvert.DeserializeObject<ReformTable>(encodedTable);
-                    System.Data.SqlClient.SqlConnection connection = new System.Data.SqlClient.SqlConnection(serverConnectionString);
-                    Server server = new Server(new ServerConnection(connection));
-                    Database database = server.Databases[serverDatabase];
-                    Table newTable = new Table(database, SqlName(table.Name));
-                    Table oldTable = database.Tables[SqlName(table.Name)];
-                    foreach (ReformColumn column in table.Columns)
+                    if (writeToExisting != "true")
                     {
-                        Column newColumn = new Column(newTable, SqlName(column.Name), SqlType(column.Type));
-                        newColumn.Nullable = true;
-                        newTable.Columns.Add(newColumn);
+                        System.Data.SqlClient.SqlConnection connection = new System.Data.SqlClient.SqlConnection(serverConnectionString);
+                        Server server = new Server(new ServerConnection(connection));
+                        Database database = server.Databases[serverDatabase];
+                        Table newTable = new Table(database, SqlName(table.Name));
+                        Table oldTable = database.Tables[SqlName(table.Name)];
+                        foreach (ReformColumn column in table.Columns)
+                        {
+                            Column newColumn = new Column(newTable, SqlName(column.Name), SqlType(column.Type));
+                            newColumn.Nullable = true;
+                            newTable.Columns.Add(newColumn);
+                        }
+                        newTable.Create();
+                        connection.Close();
                     }
-                    if (oldTable != null && dropExistingTable == "true")
-                    {
-                        oldTable.Drop();
-                    }
-                    else
-                    {
-                        Console.WriteLine("This table already exists, please set the 5th argument to true to overwrite");
-                        Environment.Exit(1);
-                    }
-                    newTable.Create();
-                    connection.Close();
 
                     using (Stream stream = client.OpenRead(reformAccessLink))
                     using (StreamReader streamReader = new StreamReader(stream))
