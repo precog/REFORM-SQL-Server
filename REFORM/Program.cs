@@ -76,7 +76,8 @@ namespace REFORM
             string serverConnectionString = args[0];
             string serverDatabase = args[1];
             string serverSchema = args[2];
-            string reformAccessLink = args[3];
+            string countBytes = args[3];
+            string reformAccessLink = args[4];
             using (WebClient client = new WebClient())
             {
                 using (Stream reformTableStream = client.OpenRead(Regex.Replace(reformAccessLink, @"/live/dataset", "")))
@@ -105,6 +106,11 @@ namespace REFORM
                     using (var dataReader = new CsvDataReader(csv))
                     {
                         csv.Configuration.TypeConverterOptionsCache.GetOptions<string>().NullValues.Add("");
+                        csv.Configuration.Encoding = System.Text.Encoding.UTF8;
+                        if (countBytes == "true")
+                        {
+                            csv.Configuration.CountBytes = true;
+                        }
                         using (SqlBulkCopy bulkCopy = new SqlBulkCopy(serverConnectionString))
                         {
                             bulkCopy.DestinationTableName = $"{serverDatabase}.{serverSchema}.[{SqlName(table.Name)}]";
