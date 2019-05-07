@@ -44,11 +44,11 @@ namespace REFORM
                 case "number":
                     return DataType.Money;
                 case "string":
-                    return DataType.Text;
+                    return DataType.NText;
                 case "boolean":
                     return DataType.Bit;
             }
-            return DataType.Text;
+            return DataType.NText;
         }
 
         static Type CSType(String reformType)
@@ -77,7 +77,8 @@ namespace REFORM
             string serverDatabase = args[1];
             string serverSchema = args[2];
             string countBytes = args[3];
-            string reformAccessLink = args[4];
+            string dropExistingTable = args[4];
+            string reformAccessLink = args[5];
             using (WebClient client = new WebClient())
             {
                 using (Stream reformTableStream = client.OpenRead(Regex.Replace(reformAccessLink, @"/live/dataset", "")))
@@ -96,7 +97,15 @@ namespace REFORM
                         newColumn.Nullable = true;
                         newTable.Columns.Add(newColumn);
                     }
-                    oldTable?.Drop();
+                    if (oldTable != null && dropExistingTable == "true")
+                    {
+                        oldTable.Drop();
+                    }
+                    else
+                    {
+                        Console.WriteLine("This table already exists, please set the 5th argument to true to overwrite");
+                        Environment.Exit(1);
+                    }
                     newTable.Create();
                     connection.Close();
 
@@ -107,6 +116,8 @@ namespace REFORM
                     {
                         csv.Configuration.TypeConverterOptionsCache.GetOptions<string>().NullValues.Add("");
                         csv.Configuration.Encoding = System.Text.Encoding.UTF8;
+                        csv.Configuration.CultureInfo = new CultureInfo("en-US");
+                        //csv.Configuration.BadDataFound = null;
                         if (countBytes == "true")
                         {
                             csv.Configuration.CountBytes = true;
