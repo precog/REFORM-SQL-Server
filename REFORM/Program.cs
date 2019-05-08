@@ -75,7 +75,6 @@ namespace REFORM
         }
         static void Main(string[] args)
         {
-            Program.CurrentCulture = "ru-RU";
             string serverConnectionString = args[0];
             string serverDatabase = args[1];
             string serverSchema = args[2];
