@@ -15,6 +15,7 @@ using Microsoft.SqlServer.Server;
 using Microsoft.SqlServer.Management.Common;
 using Microsoft.SqlServer;
 using System.Globalization;
+using System.Threading;
 
 namespace REFORM
 {
@@ -75,13 +76,15 @@ namespace REFORM
         }
         static void Main(string[] args)
         {
-            Program.CurrentCulture = "ru-RU";
             string serverConnectionString = args[0];
             string serverDatabase = args[1];
             string serverSchema = args[2];
             string countBytes = args[3];
             string writeToExisting = args[4];
             string reformAccessLink = args[5];
+            CultureInfo culture = new CultureInfo("en-us", false);
+            culture.NumberFormat.NumberDecimalSeparator = ".";
+            Thread.CurrentThread.CurrentCulture = culture;
             using (WebClient client = new WebClient())
             {
                 using (Stream reformTableStream = client.OpenRead(Regex.Replace(reformAccessLink, @"/live/dataset", "")))
@@ -114,7 +117,7 @@ namespace REFORM
                         csv.Configuration.Encoding = System.Text.Encoding.UTF8;
                         csv.Configuration.Delimiter = ",";
                         csv.Configuration.LineBreakInQuotedFieldIsBadData = false;
-                        csv.Configuration.CultureInfo = new CultureInfo("en-US");
+                        csv.Configuration.CultureInfo = culture;
                         //csv.Configuration.BadDataFound = null;
                         if (countBytes == "true")
                         {
@@ -122,7 +125,6 @@ namespace REFORM
                         }
                         using (var dataReader = new CsvDataReader(csv))
                         {
-
                             using (SqlBulkCopy bulkCopy = new SqlBulkCopy(serverConnectionString))
                             {
                                 bulkCopy.DestinationTableName = $"{serverDatabase}.{serverSchema}.[{SqlName(table.Name)}]";
