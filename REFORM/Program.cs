@@ -16,9 +16,20 @@ using Microsoft.SqlServer.Management.Common;
 using Microsoft.SqlServer;
 using System.Globalization;
 using System.Threading;
+using System.Net.Security;
 
 namespace REFORM
 {
+    class InfiniteTimeoutWebClient : WebClient
+    {
+        protected override WebRequest GetWebRequest(Uri uri)
+        {
+            WebRequest lWebRequest = base.GetWebRequest(uri);
+            lWebRequest.Timeout = Timeout.Infinite;
+            ((HttpWebRequest)lWebRequest).ReadWriteTimeout = Timeout.Infinite;
+            return lWebRequest;
+        }
+    }
     class ReformTable
     {
         [JsonProperty("columns")]
@@ -32,6 +43,12 @@ namespace REFORM
         public String Name { get; set; }
         [JsonProperty("type")]
         public String Type { get; set; }
+    }
+
+    class ReformToken
+    {
+        [JsonProperty("secret")]
+        public String Secret { get; set; }
     }
 
     class Program
@@ -85,12 +102,16 @@ namespace REFORM
             CultureInfo culture = new CultureInfo("en-us", false);
             culture.NumberFormat.NumberDecimalSeparator = ".";
             Thread.CurrentThread.CurrentCulture = culture;
-            using (WebClient client = new WebClient())
+            ServicePointManager.ServerCertificateValidationCallback = new RemoteCertificateValidationCallback(delegate { return true; } );
+
+            using (WebClient client = new InfiniteTimeoutWebClient())
             {
+
                 using (Stream reformTableStream = client.OpenRead(Regex.Replace(reformAccessLink, @"/live/dataset", "")))
                 using (StreamReader reformTableStreamReader = new StreamReader(reformTableStream, System.Text.Encoding.UTF8))
                 {
                     String encodedTable = reformTableStreamReader.ReadToEnd();
+                    Console.WriteLine(encodedTable);
                     ReformTable table = JsonConvert.DeserializeObject<ReformTable>(encodedTable);
                     if (writeToExisting != "true")
                     {
@@ -108,7 +129,6 @@ namespace REFORM
                         newTable.Create();
                         connection.Close();
                     }
-
                     using (Stream stream = client.OpenRead(reformAccessLink))
                     using (StreamReader streamReader = new StreamReader(stream, System.Text.Encoding.UTF8))
                     using (var csv = new CsvReader(streamReader))
