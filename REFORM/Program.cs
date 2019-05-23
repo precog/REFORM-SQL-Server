@@ -106,59 +106,57 @@ namespace REFORM
             ServicePointManager.ServerCertificateValidationCallback = new RemoteCertificateValidationCallback(delegate { return true; } );
             using (TransactionScope scope = new TransactionScope())
             using (WebClient client = new InfiniteTimeoutWebClient())
+            using (Stream reformTableStream = client.OpenRead(Regex.Replace(reformAccessLink, @"/live/dataset", "")))
+            using (StreamReader reformTableStreamReader = new StreamReader(reformTableStream, System.Text.Encoding.UTF8))
             {
-                using (Stream reformTableStream = client.OpenRead(Regex.Replace(reformAccessLink, @"/live/dataset", "")))
-                using (StreamReader reformTableStreamReader = new StreamReader(reformTableStream, System.Text.Encoding.UTF8))
+                String encodedTable = reformTableStreamReader.ReadToEnd();
+                Console.WriteLine(encodedTable);
+                ReformTable table = JsonConvert.DeserializeObject<ReformTable>(encodedTable);
+                System.Data.SqlClient.SqlConnection connection = new System.Data.SqlClient.SqlConnection(serverConnectionString);
+                if (writeMode != "append")
                 {
-                    String encodedTable = reformTableStreamReader.ReadToEnd();
-                    Console.WriteLine(encodedTable);
-                    ReformTable table = JsonConvert.DeserializeObject<ReformTable>(encodedTable);
-                    if (writeMode != "append")
+                    connection.Open();
+                    Server server = new Server();
+                    Database database = server.Databases[serverDatabase];
+                    Table newTable = new Table(database, SqlName(table.Name));
+                    Table oldTable = database.Tables[SqlName(table.Name)];
+                    foreach (ReformColumn column in table.Columns)
                     {
-                        System.Data.SqlClient.SqlConnection connection = new System.Data.SqlClient.SqlConnection(serverConnectionString);
-                        connection.Open();
-                        Server server = new Server();
-                        Database database = server.Databases[serverDatabase];
-                        Table newTable = new Table(database, SqlName(table.Name));
-                        Table oldTable = database.Tables[SqlName(table.Name)];
-                        foreach (ReformColumn column in table.Columns)
-                        {
-                            Column newColumn = new Column(newTable, SqlName(column.Name), SqlType(column.Type));
-                            newColumn.Nullable = true;
-                            newTable.Columns.Add(newColumn);
-                        }
-                        if (writeMode == "replace") { oldTable?.DropIfExists(); }
-                        newTable.Create();
-                        using (Stream stream = client.OpenRead(reformAccessLink))
-                        using (StreamReader streamReader = new StreamReader(stream, System.Text.Encoding.UTF8))
-                        using (var csv = new CsvReader(streamReader))
-                        {
-                            csv.Configuration.TypeConverterOptionsCache.GetOptions<string>().NullValues.Add("");
-                            csv.Configuration.Encoding = System.Text.Encoding.UTF8;
-                            csv.Configuration.Delimiter = ",";
-                            csv.Configuration.LineBreakInQuotedFieldIsBadData = false;
-                            csv.Configuration.CultureInfo = culture;
-                            //csv.Configuration.BadDataFound = null;
-                            if (countBytes == "count")
-                            {
-                                csv.Configuration.CountBytes = true;
-                            }
-                            using (var dataReader = new CsvDataReader(csv))
-                            {
-                                using (SqlBulkCopy bulkCopy = new SqlBulkCopy(connection))
-                                {
-                                    bulkCopy.DestinationTableName = $"{serverDatabase}.{serverSchema}.[{SqlName(table.Name)}]";
-                                    bulkCopy.EnableStreaming = true;
-                                    bulkCopy.BulkCopyTimeout = 0;
-                                    bulkCopy.WriteToServer(dataReader);
-                                    bulkCopy.Close();
-                                }
-                            }
-                        }
-                        connection.Close();
-                        scope.Complete();
+                        Column newColumn = new Column(newTable, SqlName(column.Name), SqlType(column.Type));
+                        newColumn.Nullable = true;
+                        newTable.Columns.Add(newColumn);
                     }
+                    if (writeMode == "replace") { oldTable?.DropIfExists(); }
+                    newTable.Create();
                 }
+                using (Stream stream = client.OpenRead(reformAccessLink))
+                using (StreamReader streamReader = new StreamReader(stream, System.Text.Encoding.UTF8))
+                using (var csv = new CsvReader(streamReader))
+                {
+                    csv.Configuration.TypeConverterOptionsCache.GetOptions<string>().NullValues.Add("");
+                    csv.Configuration.Encoding = System.Text.Encoding.UTF8;
+                    csv.Configuration.Delimiter = ",";
+                    csv.Configuration.LineBreakInQuotedFieldIsBadData = false;
+                    csv.Configuration.CultureInfo = culture;
+                    //csv.Configuration.BadDataFound = null;
+                    if (countBytes == "count")
+                    {
+                        csv.Configuration.CountBytes = true;
+                    }
+                    using (var dataReader = new CsvDataReader(csv))
+                    {
+                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(connection))
+                        {
+                            bulkCopy.DestinationTableName = $"{serverDatabase}.{serverSchema}.[{SqlName(table.Name)}]";
+                            bulkCopy.EnableStreaming = true;
+                            bulkCopy.BulkCopyTimeout = 0;
+                            bulkCopy.WriteToServer(dataReader);
+                            bulkCopy.Close();
+                        }
+                    }
+                    connection.Close();
+                 }
+                scope.Complete();
             }
         }
     }
