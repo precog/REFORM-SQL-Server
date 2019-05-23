@@ -38,6 +38,11 @@ namespace REFORM
         [JsonProperty("name")]
         public String Name { get; set; }
     }
+    class ReformListingTable
+    {
+        [JsonProperty("name")]
+        public String Name { get; set; }
+    }
     class ReformColumn
     {
         [JsonProperty("column")]
@@ -92,28 +97,15 @@ namespace REFORM
         {
             return $"{Regex.Replace(reformName, @"[^A-Za-z0-9]", "_")}";
         }
-        static void Main(string[] args)
+
+        static void Transfer(WebClient client, SqlConnection connection, SqlBulkCopy bulkCopy, CultureInfo culture, string serverConnectionString, string serverDatabase, string serverSchema, string countBytes, string writeMode, string reformAccessLink)
         {
-            string serverConnectionString = args[0];
-            string serverDatabase = args[1];
-            string serverSchema = args[2];
-            string countBytes = args[3];
-            string writeMode = args[4];
-            string reformAccessLink = args[5];
-            CultureInfo culture = new CultureInfo("en-us", false);
-            culture.NumberFormat.NumberDecimalSeparator = ".";
-            Thread.CurrentThread.CurrentCulture = culture;
-            ServicePointManager.ServerCertificateValidationCallback = new RemoteCertificateValidationCallback(delegate { return true; } );
-            using (TransactionScope scope = new TransactionScope())
-            using (WebClient client = new InfiniteTimeoutWebClient())
             using (Stream reformTableStream = client.OpenRead(Regex.Replace(reformAccessLink, @"/live/dataset", "")))
             using (StreamReader reformTableStreamReader = new StreamReader(reformTableStream, System.Text.Encoding.UTF8))
             {
                 String encodedTable = reformTableStreamReader.ReadToEnd();
                 Console.WriteLine(encodedTable);
                 ReformTable table = JsonConvert.DeserializeObject<ReformTable>(encodedTable);
-                System.Data.SqlClient.SqlConnection connection = new System.Data.SqlClient.SqlConnection(serverConnectionString);
-                connection.Open();
                 if (writeMode != "append")
                 {
                     Server server = new Server();
@@ -145,17 +137,55 @@ namespace REFORM
                     }
                     using (var dataReader = new CsvDataReader(csv))
                     {
-                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(connection))
                         {
                             bulkCopy.DestinationTableName = $"{serverDatabase}.{serverSchema}.[{SqlName(table.Name)}]";
                             bulkCopy.EnableStreaming = true;
                             bulkCopy.BulkCopyTimeout = 0;
                             bulkCopy.WriteToServer(dataReader);
-                            bulkCopy.Close();
                         }
                     }
-                    connection.Close();
-                 }
+                }
+            }
+        }
+
+        static void Main(string[] args)
+        {
+            string serverConnectionString = args[0];
+            string serverDatabase = args[1];
+            string serverSchema = args[2];
+            string countBytes = args[3];
+            string writeMode = args[4];
+            string reformAccessLink = args[5];
+            CultureInfo culture = new CultureInfo("en-us", false);
+            culture.NumberFormat.NumberDecimalSeparator = ".";
+            Thread.CurrentThread.CurrentCulture = culture;
+            ServicePointManager.ServerCertificateValidationCallback = new RemoteCertificateValidationCallback(delegate { return true; });
+            using (TransactionScope scope = new TransactionScope())
+            using (WebClient client = new InfiniteTimeoutWebClient())
+            using (SqlConnection connection = new System.Data.SqlClient.SqlConnection(serverConnectionString))
+            using (SqlBulkCopy bulkCopy = new SqlBulkCopy(connection))
+            {
+                connection.Open();
+                if (reformAccessLink.Contains("/live/dataset"))
+                {
+                    Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, reformAccessLink);
+                }
+                else
+                {
+                    using (Stream reformTablesStream = client.OpenRead($"{reformAccessLink}/api/tables"))
+                    using (StreamReader reformTablesStreamReader = new StreamReader(reformTablesStream, System.Text.Encoding.UTF8))
+                    {
+                        String encodedTables = reformTablesStreamReader.ReadToEnd();
+                        Dictionary<String, ReformListingTable> tables = JsonConvert.DeserializeObject<Dictionary<String, ReformListingTable>>(encodedTables);
+                        foreach (KeyValuePair<String, ReformListingTable> table in tables)
+                        {
+                            if (!table.Value.Name.Contains("[Archived]"))
+                            {
+                                Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, $"{reformAccessLink}/api/table/{table.Key}/live/dataset");
+                            }
+                        }
+                    }
+                }
                 scope.Complete();
             }
         }
