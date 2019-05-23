@@ -17,6 +17,7 @@ using Microsoft.SqlServer;
 using System.Globalization;
 using System.Threading;
 using System.Net.Security;
+using System.Transactions;
 
 namespace REFORM
 {
@@ -98,15 +99,15 @@ namespace REFORM
             string serverSchema = args[2];
             string countBytes = args[3];
             string writeToExisting = args[4];
-            string reformAccessLink = args[5];
+            string dropExisting = args[5];
+            string reformAccessLink = args[6];
             CultureInfo culture = new CultureInfo("en-us", false);
             culture.NumberFormat.NumberDecimalSeparator = ".";
             Thread.CurrentThread.CurrentCulture = culture;
             ServicePointManager.ServerCertificateValidationCallback = new RemoteCertificateValidationCallback(delegate { return true; } );
-
+            using (TransactionScope scope = new TransactionScope())
             using (WebClient client = new InfiniteTimeoutWebClient())
             {
-
                 using (Stream reformTableStream = client.OpenRead(Regex.Replace(reformAccessLink, @"/live/dataset", "")))
                 using (StreamReader reformTableStreamReader = new StreamReader(reformTableStream, System.Text.Encoding.UTF8))
                 {
@@ -116,7 +117,8 @@ namespace REFORM
                     if (writeToExisting != "true")
                     {
                         System.Data.SqlClient.SqlConnection connection = new System.Data.SqlClient.SqlConnection(serverConnectionString);
-                        Server server = new Server(new ServerConnection(connection));
+                        connection.Open();
+                        Server server = new Server();
                         Database database = server.Databases[serverDatabase];
                         Table newTable = new Table(database, SqlName(table.Name));
                         Table oldTable = database.Tables[SqlName(table.Name)];
@@ -126,34 +128,36 @@ namespace REFORM
                             newColumn.Nullable = true;
                             newTable.Columns.Add(newColumn);
                         }
+                        if (dropExisting == "true") { oldTable?.DropIfExists(); }
                         newTable.Create();
-                        connection.Close();
-                    }
-                    using (Stream stream = client.OpenRead(reformAccessLink))
-                    using (StreamReader streamReader = new StreamReader(stream, System.Text.Encoding.UTF8))
-                    using (var csv = new CsvReader(streamReader))
-                    {
-                        csv.Configuration.TypeConverterOptionsCache.GetOptions<string>().NullValues.Add("");
-                        csv.Configuration.Encoding = System.Text.Encoding.UTF8;
-                        csv.Configuration.Delimiter = ",";
-                        csv.Configuration.LineBreakInQuotedFieldIsBadData = false;
-                        csv.Configuration.CultureInfo = culture;
-                        //csv.Configuration.BadDataFound = null;
-                        if (countBytes == "true")
+                        using (Stream stream = client.OpenRead(reformAccessLink))
+                        using (StreamReader streamReader = new StreamReader(stream, System.Text.Encoding.UTF8))
+                        using (var csv = new CsvReader(streamReader))
                         {
-                            csv.Configuration.CountBytes = true;
-                        }
-                        using (var dataReader = new CsvDataReader(csv))
-                        {
-                            using (SqlBulkCopy bulkCopy = new SqlBulkCopy(serverConnectionString))
+                            csv.Configuration.TypeConverterOptionsCache.GetOptions<string>().NullValues.Add("");
+                            csv.Configuration.Encoding = System.Text.Encoding.UTF8;
+                            csv.Configuration.Delimiter = ",";
+                            csv.Configuration.LineBreakInQuotedFieldIsBadData = false;
+                            csv.Configuration.CultureInfo = culture;
+                            //csv.Configuration.BadDataFound = null;
+                            if (countBytes == "true")
                             {
-                                bulkCopy.DestinationTableName = $"{serverDatabase}.{serverSchema}.[{SqlName(table.Name)}]";
-                                bulkCopy.EnableStreaming = true;
-                                bulkCopy.BulkCopyTimeout = 0;
-                                bulkCopy.WriteToServer(dataReader);
-                                bulkCopy.Close();
+                                csv.Configuration.CountBytes = true;
+                            }
+                            using (var dataReader = new CsvDataReader(csv))
+                            {
+                                using (SqlBulkCopy bulkCopy = new SqlBulkCopy(connection))
+                                {
+                                    bulkCopy.DestinationTableName = $"{serverDatabase}.{serverSchema}.[{SqlName(table.Name)}]";
+                                    bulkCopy.EnableStreaming = true;
+                                    bulkCopy.BulkCopyTimeout = 0;
+                                    bulkCopy.WriteToServer(dataReader);
+                                    bulkCopy.Close();
+                                }
                             }
                         }
+                        connection.Close();
+                        scope.Complete();
                     }
                 }
             }
