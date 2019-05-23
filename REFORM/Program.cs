@@ -113,9 +113,9 @@ namespace REFORM
                 Console.WriteLine(encodedTable);
                 ReformTable table = JsonConvert.DeserializeObject<ReformTable>(encodedTable);
                 System.Data.SqlClient.SqlConnection connection = new System.Data.SqlClient.SqlConnection(serverConnectionString);
+                connection.Open();
                 if (writeMode != "append")
                 {
-                    connection.Open();
                     Server server = new Server();
                     Database database = server.Databases[serverDatabase];
                     Table newTable = new Table(database, SqlName(table.Name));
