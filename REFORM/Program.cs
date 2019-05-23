@@ -98,9 +98,8 @@ namespace REFORM
             string serverDatabase = args[1];
             string serverSchema = args[2];
             string countBytes = args[3];
-            string writeToExisting = args[4];
-            string dropExisting = args[5];
-            string reformAccessLink = args[6];
+            string writeMode = args[4];
+            string reformAccessLink = args[5];
             CultureInfo culture = new CultureInfo("en-us", false);
             culture.NumberFormat.NumberDecimalSeparator = ".";
             Thread.CurrentThread.CurrentCulture = culture;
@@ -114,7 +113,7 @@ namespace REFORM
                     String encodedTable = reformTableStreamReader.ReadToEnd();
                     Console.WriteLine(encodedTable);
                     ReformTable table = JsonConvert.DeserializeObject<ReformTable>(encodedTable);
-                    if (writeToExisting != "true")
+                    if (writeMode != "append")
                     {
                         System.Data.SqlClient.SqlConnection connection = new System.Data.SqlClient.SqlConnection(serverConnectionString);
                         connection.Open();
@@ -128,7 +127,7 @@ namespace REFORM
                             newColumn.Nullable = true;
                             newTable.Columns.Add(newColumn);
                         }
-                        if (dropExisting == "true") { oldTable?.DropIfExists(); }
+                        if (writeMode == "replace") { oldTable?.DropIfExists(); }
                         newTable.Create();
                         using (Stream stream = client.OpenRead(reformAccessLink))
                         using (StreamReader streamReader = new StreamReader(stream, System.Text.Encoding.UTF8))
@@ -140,7 +139,7 @@ namespace REFORM
                             csv.Configuration.LineBreakInQuotedFieldIsBadData = false;
                             csv.Configuration.CultureInfo = culture;
                             //csv.Configuration.BadDataFound = null;
-                            if (countBytes == "true")
+                            if (countBytes == "count")
                             {
                                 csv.Configuration.CountBytes = true;
                             }
