@@ -100,7 +100,8 @@ namespace REFORM
 
         static void Transfer(WebClient client, SqlConnection connection, SqlBulkCopy bulkCopy, CultureInfo culture, string serverConnectionString, string serverDatabase, string serverSchema, string countBytes, string writeMode, string reformAccessLink)
         {
-            using (Stream reformTableStream = client.OpenRead(Regex.Replace(reformAccessLink, @"/live/dataset", "")))
+            string tableUrl = Regex.Replace(reformAccessLink, @"/live/dataset", "");
+            using (Stream reformTableStream = client.OpenRead(tableUrl))
             using (StreamReader reformTableStreamReader = new StreamReader(reformTableStream, System.Text.Encoding.UTF8))
             {
                 String encodedTable = reformTableStreamReader.ReadToEnd();
@@ -108,7 +109,7 @@ namespace REFORM
                 ReformTable table = JsonConvert.DeserializeObject<ReformTable>(encodedTable);
                 if (writeMode != "append")
                 {
-                    Server server = new Server();
+                    Server server = new Server(new ServerConnection(connection));
                     Database database = server.Databases[serverDatabase];
                     Table newTable = new Table(database, SqlName(table.Name));
                     Table oldTable = database.Tables[SqlName(table.Name)];
@@ -166,7 +167,7 @@ namespace REFORM
             using (SqlBulkCopy bulkCopy = new SqlBulkCopy(connection))
             {
                 connection.Open();
-                if (reformAccessLink.Contains("/live/dataset"))
+                if (reformAccessLink.Contains("/result/"))
                 {
                     Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, reformAccessLink);
                 }
@@ -181,7 +182,9 @@ namespace REFORM
                         {
                             if (!table.Value.Name.Contains("[Archived]"))
                             {
-                                Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, $"{reformAccessLink}/api/table/{table.Key}/live/dataset");
+                                String encodedToken = client.UploadString($"{reformAccessLink}/api/table/${table.Key}/access-link", "");
+                                ReformToken token = JsonConvert.DeserializeObject<ReformToken>(encodedToken);
+                                Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, $"{reformAccessLink}/api/table/{table.Key}/result/{token}.csv");
                             }
                         }
                     }
