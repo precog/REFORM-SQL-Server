@@ -108,7 +108,7 @@ namespace REFORM
                 ReformTable table = JsonConvert.DeserializeObject<ReformTable>(encodedTable);
                 if (writeMode != "append")
                 {
-                    Server server = new Server();
+                    Server server = new Server(new ServerConnection(connection));
                     Database database = server.Databases[serverDatabase];
                     Table newTable = new Table(database, SqlName(table.Name));
                     Table oldTable = database.Tables[SqlName(table.Name)];
