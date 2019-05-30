@@ -98,7 +98,7 @@ namespace REFORM
             return $"{Regex.Replace(reformName, @"[^A-Za-z0-9]", "_")}";
         }
 
-        static void Transfer(WebClient client, SqlConnection connection, SqlBulkCopy bulkCopy, CultureInfo culture, string serverConnectionString, string serverDatabase, string serverSchema, string countBytes, string writeMode, string reformAccessLink)
+        static void Transfer(WebClient client, SqlConnection connection, SqlBulkCopy bulkCopy, CultureInfo culture, string serverConnectionString, string serverDatabase, string serverSchema, string countBytes, string writeMode, string defaultConstraintName, string defaultConstraintType, string defaultConstraint, string reformAccessLink)
         {
             using (Stream reformTableStream = client.OpenRead(Regex.Replace(reformAccessLink, @"/live/dataset", "")))
             using (StreamReader reformTableStreamReader = new StreamReader(reformTableStream, System.Text.Encoding.UTF8))
@@ -118,10 +118,10 @@ namespace REFORM
                         newColumn.Nullable = true;
                         newTable.Columns.Add(newColumn);
                     }
-                    Column createdAt = new Column(newTable, "CreatedAt", DataType.DateTime);
+                    Column createdAt = new Column(newTable, defaultConstraintName, SqlType(defaultConstraintType));
                     createdAt.Nullable = false;
                     DefaultConstraint constraint = createdAt.AddDefaultConstraint();
-                    constraint.Text = "SYSDATETIME()";
+                    constraint.Text = defaultConstraint;
                     newTable.Columns.Add(createdAt);
                     if (writeMode == "replace") { oldTable?.DropIfExists(); }
                     newTable.Create();
@@ -160,7 +160,10 @@ namespace REFORM
             string serverSchema = args[2];
             string countBytes = args[3];
             string writeMode = args[4];
-            string reformAccessLink = args[5];
+            string defaultConstraintName = args[5];
+            string defaultConstraintType = args[6];
+            string defaultConstraint = args[7];
+            string reformAccessLink = args[8];
             CultureInfo culture = new CultureInfo("en-us", false);
             culture.NumberFormat.NumberDecimalSeparator = ".";
             Thread.CurrentThread.CurrentCulture = culture;
@@ -173,7 +176,7 @@ namespace REFORM
                 connection.Open();
                 if (reformAccessLink.Contains("/live/dataset"))
                 {
-                    Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, reformAccessLink);
+                    Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, defaultConstraintName, defaultConstraintType, defaultConstraint, reformAccessLink);
                 }
                 else
                 {
@@ -186,7 +189,7 @@ namespace REFORM
                         {
                             if (!table.Value.Name.Contains("[Archived]"))
                             {
-                                Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, $"{reformAccessLink}/api/table/{table.Key}/live/dataset");
+                                Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, defaultConstraintName, defaultConstraintType, defaultConstraint, $"{reformAccessLink}/api/table/{table.Key}/live/dataset");
                             }
                         }
                     }
