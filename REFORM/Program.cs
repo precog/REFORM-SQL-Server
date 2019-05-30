@@ -118,6 +118,11 @@ namespace REFORM
                         newColumn.Nullable = true;
                         newTable.Columns.Add(newColumn);
                     }
+                    Column createdAt = new Column(newTable, "CreatedAt", DataType.DateTime);
+                    createdAt.Nullable = false;
+                    DefaultConstraint constraint = createdAt.AddDefaultConstraint();
+                    constraint.Text = "SYSDATETIME()";
+                    newTable.Columns.Add(createdAt);
                     if (writeMode == "replace") { oldTable?.DropIfExists(); }
                     newTable.Create();
                 }
