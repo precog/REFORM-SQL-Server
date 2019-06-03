@@ -106,26 +106,23 @@ namespace REFORM
                 String encodedTable = reformTableStreamReader.ReadToEnd();
                 Console.WriteLine(encodedTable);
                 ReformTable table = JsonConvert.DeserializeObject<ReformTable>(encodedTable);
-                if (writeMode != "append")
+                Server server = new Server(new ServerConnection(connection));
+                Database database = server.Databases[serverDatabase];
+                Table newTable = new Table(database, SqlName(table.Name));
+                Table oldTable = database.Tables[SqlName(table.Name)];
+                foreach (ReformColumn column in table.Columns)
                 {
-                    Server server = new Server(new ServerConnection(connection));
-                    Database database = server.Databases[serverDatabase];
-                    Table newTable = new Table(database, SqlName(table.Name));
-                    Table oldTable = database.Tables[SqlName(table.Name)];
-                    foreach (ReformColumn column in table.Columns)
-                    {
-                        Column newColumn = new Column(newTable, SqlName(column.Name), SqlType(column.Type));
-                        newColumn.Nullable = true;
-                        newTable.Columns.Add(newColumn);
-                    }
-                    Column createdAt = new Column(newTable, defaultConstraintName, SqlType(defaultConstraintType));
-                    createdAt.Nullable = false;
-                    DefaultConstraint constraint = createdAt.AddDefaultConstraint();
-                    constraint.Text = defaultConstraint;
-                    newTable.Columns.Add(createdAt);
-                    if (writeMode == "replace") { oldTable?.DropIfExists(); }
-                    newTable.Create();
+                    Column newColumn = new Column(newTable, SqlName(column.Name), SqlType(column.Type));
+                    newColumn.Nullable = true;
+                    newTable.Columns.Add(newColumn);
                 }
+                Column createdAt = new Column(newTable, defaultConstraintName, SqlType(defaultConstraintType));
+                createdAt.Nullable = false;
+                DefaultConstraint constraint = createdAt.AddDefaultConstraint();
+                constraint.Text = defaultConstraint;
+                newTable.Columns.Add(createdAt);
+                if (writeMode == "replace") { oldTable?.DropIfExists(); }
+                if (oldTable == null || writeMode == "replace") { newTable.Create(); }
                 using (Stream stream = client.OpenRead(reformAccessLink))
                 using (StreamReader streamReader = new StreamReader(stream, System.Text.Encoding.UTF8))
                 using (var csv = new CsvReader(streamReader))
