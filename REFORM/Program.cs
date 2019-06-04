@@ -21,7 +21,40 @@ using System.Transactions;
 
 namespace REFORM
 {
-    class InfiniteTimeoutWebClient : WebClient
+    internal sealed class ExtraColumnCsvDataReader : CsvDataReader
+    {
+        private readonly string columnName;
+        private readonly string columnValue;
+        private readonly CsvReader csv;
+        public ExtraColumnCsvDataReader(CsvReader csv, string columnName, string columnValue) : base(csv)
+        {
+            this.columnName = columnName;
+            this.columnValue = columnValue;
+            this.csv = csv;
+        }
+
+        override public object GetValue(int i)
+        {
+            return i == csv.Context.HeaderRecord.Length ? (object)this.columnValue : base.GetValue(i);
+        }
+
+        override public int FieldCount
+        {
+            get
+            {
+                return csv.Context.Record.Length + 1;
+            }
+        }
+
+
+        override public bool IsDBNull(int i)
+        {
+            return (i == this.csv.Context.HeaderRecord.Length) ? false : base.IsDBNull(i);
+        }
+
+    }
+
+    internal sealed class InfiniteTimeoutWebClient : WebClient
     {
         protected override WebRequest GetWebRequest(Uri uri)
         {
@@ -82,7 +115,7 @@ namespace REFORM
             switch (reformType)
             {
                 case "offsetdatetime":
-                    return typeof(DateTime);
+                    return typeof(DateTimeOffset);
                 case "number":
                     return typeof(Decimal);
                 case "string":
@@ -117,9 +150,7 @@ namespace REFORM
                     newTable.Columns.Add(newColumn);
                 }
                 Column createdAt = new Column(newTable, defaultConstraintName, SqlType(defaultConstraintType));
-                createdAt.Nullable = false;
-                DefaultConstraint constraint = createdAt.AddDefaultConstraint();
-                constraint.Text = defaultConstraint;
+                createdAt.Nullable = true;
                 newTable.Columns.Add(createdAt);
                 if (writeMode == "replace") { oldTable?.DropIfExists(); }
                 if (oldTable == null || writeMode == "replace") { newTable.Create(); }
@@ -137,7 +168,7 @@ namespace REFORM
                     {
                         csv.Configuration.CountBytes = true;
                     }
-                    using (var dataReader = new CsvDataReader(csv))
+                    using (var dataReader = new ExtraColumnCsvDataReader(csv, defaultConstraintName, defaultConstraint))
                     {
                         {
                             bulkCopy.DestinationTableName = $"{serverDatabase}.{serverSchema}.[{SqlName(table.Name)}]";
@@ -171,7 +202,7 @@ namespace REFORM
             using (SqlBulkCopy bulkCopy = new SqlBulkCopy(connection))
             {
                 connection.Open();
-                if (reformAccessLink.Contains("/live/dataset"))
+                if (reformAccessLink.Contains("/live/dataset")) //("/result/"))
                 {
                     Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, defaultConstraintName, defaultConstraintType, defaultConstraint, reformAccessLink);
                 }
@@ -186,7 +217,9 @@ namespace REFORM
                         {
                             if (!table.Value.Name.Contains("[Archived]"))
                             {
-                                Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, defaultConstraintName, defaultConstraintType, defaultConstraint, $"{reformAccessLink}/api/table/{table.Key}/live/dataset");
+                                //String encodedToken = client.UploadString($"{reformAccessLink}/api/table/${table.Key}/access-token", "");
+                                //ReformToken token = JsonConvert.DeserializeObject<ReformToken>(encodedToken);
+                                Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, defaultConstraintName, defaultConstraintType, defaultConstraint, $"{reformAccessLink}/api/table/{table.Key}/live/dataset"); // $"{reformAccessLink}/api/table/{table.Key}/result/{token}.csv");
                             }
                         }
                     }
