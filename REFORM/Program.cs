@@ -131,9 +131,9 @@ namespace REFORM
             return $"{Regex.Replace(reformName, @"[^A-Za-z0-9]", "_")}";
         }
 
-        static void Transfer(WebClient client, SqlConnection connection, SqlBulkCopy bulkCopy, CultureInfo culture, string serverConnectionString, string serverDatabase, string serverSchema, string countBytes, string writeMode, string defaultConstraintName, string defaultConstraintType, string defaultConstraint, string reformAccessLink)
+        static void Transfer(WebClient client, SqlConnection connection, SqlBulkCopy bulkCopy, CultureInfo culture, string serverConnectionString, string serverDatabase, string serverSchema, string countBytes, string writeMode, string defaultConstraintName, string defaultConstraintType, string defaultConstraint, string reformTableLink, string reformResultsLink)
         {
-            using (Stream reformTableStream = client.OpenRead(Regex.Replace(reformAccessLink, @"/live/dataset", "")))
+            using (Stream reformTableStream = client.OpenRead(reformTableLink))
             using (StreamReader reformTableStreamReader = new StreamReader(reformTableStream, System.Text.Encoding.UTF8))
             {
                 String encodedTable = reformTableStreamReader.ReadToEnd();
@@ -154,7 +154,7 @@ namespace REFORM
                 newTable.Columns.Add(createdAt);
                 if (writeMode == "replace") { oldTable?.DropIfExists(); }
                 if (oldTable == null || writeMode == "replace") { newTable.Create(); }
-                using (Stream stream = client.OpenRead(reformAccessLink))
+                using (Stream stream = client.OpenRead(reformResultsLink))
                 using (StreamReader streamReader = new StreamReader(stream, System.Text.Encoding.UTF8))
                 using (var csv = new CsvReader(streamReader))
                 {
@@ -191,7 +191,15 @@ namespace REFORM
             string defaultConstraintName = args[5];
             string defaultConstraintType = args[6];
             string defaultConstraint = args[7];
-            string reformAccessLink = args[8];
+            string reformBaseLink = args[8];
+            string reformTableId;
+            try {
+                reformTableId = args[9];
+            }
+            catch
+            {
+                reformTableId = null;
+            }
             CultureInfo culture = new CultureInfo("en-us", false);
             culture.NumberFormat.NumberDecimalSeparator = ".";
             Thread.CurrentThread.CurrentCulture = culture;
@@ -202,13 +210,18 @@ namespace REFORM
             using (SqlBulkCopy bulkCopy = new SqlBulkCopy(connection))
             {
                 connection.Open();
-                if (reformAccessLink.Contains("/live/dataset")) //("/result/"))
+                if (reformTableId != null && reformTableId != "")
                 {
-                    Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, defaultConstraintName, defaultConstraintType, defaultConstraint, reformAccessLink);
+                    String reformTableLink = $"{reformBaseLink}/api/table/{reformTableId}";
+                    String encodedToken = client.UploadString($"{reformTableLink}/access-token", "");
+                    ReformToken token = JsonConvert.DeserializeObject<ReformToken>(encodedToken);
+                    String reformResultsLink = $"{reformBaseLink}/api/result/{token.Secret}.csv";
+                    Console.WriteLine(reformResultsLink);
+                    Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, defaultConstraintName, defaultConstraintType, defaultConstraint, reformTableLink, reformResultsLink);
                 }
                 else
                 {
-                    using (Stream reformTablesStream = client.OpenRead($"{reformAccessLink}/api/tables"))
+                    using (Stream reformTablesStream = client.OpenRead($"{reformBaseLink}/api/tables"))
                     using (StreamReader reformTablesStreamReader = new StreamReader(reformTablesStream, System.Text.Encoding.UTF8))
                     {
                         String encodedTables = reformTablesStreamReader.ReadToEnd();
@@ -217,9 +230,11 @@ namespace REFORM
                         {
                             if (!table.Value.Name.Contains("[Archived]"))
                             {
-                                //String encodedToken = client.UploadString($"{reformAccessLink}/api/table/${table.Key}/access-token", "");
-                                //ReformToken token = JsonConvert.DeserializeObject<ReformToken>(encodedToken);
-                                Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, defaultConstraintName, defaultConstraintType, defaultConstraint, $"{reformAccessLink}/api/table/{table.Key}/live/dataset"); // $"{reformAccessLink}/api/table/{table.Key}/result/{token}.csv");
+                                String encodedToken = client.UploadString($"{reformBaseLink}/api/table/{table.Key}/access-token", "");
+                                ReformToken token = JsonConvert.DeserializeObject<ReformToken>(encodedToken);
+                                String reformResultsLink = $"{reformBaseLink}/api/result/{token.Secret}.csv";
+                                Console.WriteLine(reformResultsLink);
+                                Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, defaultConstraintName, defaultConstraintType, defaultConstraint, $"{reformBaseLink}/api/table/{table.Key}", $"{reformBaseLink}/api/result/{token.Secret}.csv");
                             }
                         }
                     }
