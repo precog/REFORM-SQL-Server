@@ -32,7 +32,7 @@ The name of your table is taken from the name of the virtual table in REFORM.
 
 Single table with datetime example:
 
-C:\Users\Administrator\Downloads\REFORM\REFORM.exe "Data Source=EC2AMAZ-PFM7ROF;Integrated Security=True;Persist Security Info=False;Pooling=False;MultipleActiveResultSets=False;Encrypt=False;TrustServerCertificate=False;" example_database dbo false create "CreatedAt" "offsetdatetime" "SYSDATETIME()" https://reform.example.com 431182ea-6b62-47d6-82da-a5f1d373c540
+C:\Users\Administrator\Downloads\REFORM\REFORM.exe "Data Source=EC2AMAZ-PFM7ROF;Integrated Security=True;Persist Security Info=False;Pooling=False;MultipleActiveResultSets=False;Encrypt=False;TrustServerCertificate=False;" example_database dbo false create "CreatedAt" "offsetdatetime" "2019-05-30T20:18:53Z()" https://reform.example.com 431182ea-6b62-47d6-82da-a5f1d373c540
 
 Single table with datetime example:
 
