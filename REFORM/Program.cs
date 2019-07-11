@@ -153,7 +153,7 @@ namespace REFORM
                 createdAt.Nullable = true;
                 newTable.Columns.Add(createdAt);
                 if (writeMode == "replace") { oldTable?.DropIfExists(); }
-                if (oldTable == null || writeMode == "replace") { newTable.Create(); }
+                if (!(writeMode == "append" && oldTable != null)) { newTable.Create(); }
                 using (Stream stream = client.OpenRead(reformResultsLink))
                 using (StreamReader streamReader = new StreamReader(stream, System.Text.Encoding.UTF8))
                 using (var csv = new CsvReader(streamReader))
@@ -216,7 +216,6 @@ namespace REFORM
                     String encodedToken = client.UploadString($"{reformTableLink}/access-token", "");
                     ReformToken token = JsonConvert.DeserializeObject<ReformToken>(encodedToken);
                     String reformResultsLink = $"{reformBaseLink}/api/result/{token.Secret}.csv";
-                    Console.WriteLine(reformResultsLink);
                     Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, defaultConstraintName, defaultConstraintType, defaultConstraint, reformTableLink, reformResultsLink);
                 }
                 else
@@ -233,7 +232,6 @@ namespace REFORM
                                 String encodedToken = client.UploadString($"{reformBaseLink}/api/table/{table.Key}/access-token", "");
                                 ReformToken token = JsonConvert.DeserializeObject<ReformToken>(encodedToken);
                                 String reformResultsLink = $"{reformBaseLink}/api/result/{token.Secret}.csv";
-                                Console.WriteLine(reformResultsLink);
                                 Transfer(client, connection, bulkCopy, culture, serverConnectionString, serverDatabase, serverSchema, countBytes, writeMode, defaultConstraintName, defaultConstraintType, defaultConstraint, $"{reformBaseLink}/api/table/{table.Key}", $"{reformBaseLink}/api/result/{token.Secret}.csv");
                             }
                         }
